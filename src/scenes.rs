@@ -15,7 +15,7 @@ pub enum SceneType {
 const START_SCENE : SceneType = SceneType::Game;
 
 pub struct SceneStorage {
-    scene: SceneType,
+    pub scene: SceneType,
     game: Game,
     chess: ChessGame,
 }
@@ -33,7 +33,7 @@ impl SceneStorage {
 pub fn draw(draw_handler: &mut RaylibDrawHandle, scene: &SceneStorage) {
     match scene.scene {
         SceneType::Start => start::draw_menu(draw_handler),
-        SceneType::Game => game::draw_menu(draw_handler, scene),
+        SceneType::Game => game::draw_scene(draw_handler, scene),
         SceneType::End => end::draw_menu(draw_handler),
     }
 }
