@@ -8,6 +8,11 @@ use super::{SceneStorage, Game, screen, promotion};
 use super::screen::{ATTACK_CIRCLE_RADIUS, IMAGE_SIZE, TILE_SIZE};
 use super::textures::get_texture_for_square;
 
+const RING_WIDTH  : f32 = 5.0;
+const RING_PADDING : f32 = 3.0;
+const INNER_RADIUS : f32 = (TILE_SIZE as f32 / 2.0) - RING_WIDTH - RING_PADDING;
+const OUTER_RADIUS : f32 = (TILE_SIZE as f32 / 2.0) - RING_PADDING;
+
 pub fn draw_board_background(draw_handler: &mut RaylibDrawHandle, game: &Game) {
     let mut color_index = 0;
     for y in 0..8 {
@@ -52,9 +57,15 @@ pub fn draw_attackable_slots(draw_handler: &mut RaylibDrawHandle, scene: &SceneS
     if let Some(moves) = &scene.game.selected_piece_moves {
         for y in 0..8u8{
             for x in 0..8u8 {
-                if let Some(movetype) = moves.get(&BoardPosition::try_from((x, y)).unwrap()) {
+                let pos = BoardPosition::try_from((x, y)).unwrap();
+                if let Some(movetype) = moves.get(&pos) {
                     let (px, py) = screen::board_coord_to_screen(x as i32, y as i32);
-                    draw_handler.draw_circle(px + (TILE_SIZE) / 2, py + (TILE_SIZE) / 2, ATTACK_CIRCLE_RADIUS as f32, scene.game.colors[3]);
+                    if scene.chess.get_square(&pos).is_some() {
+                        let center = Vector2{ x: (px + TILE_SIZE / 2) as f32, y: (py + TILE_SIZE / 2) as f32 };
+                        draw_handler.draw_ring(center, INNER_RADIUS, OUTER_RADIUS, 0.0, 360.0, 1, scene.game.colors[3]);
+                    } else {
+                        draw_handler.draw_circle(px + (TILE_SIZE) / 2, py + (TILE_SIZE) / 2, ATTACK_CIRCLE_RADIUS as f32, scene.game.colors[3]);
+                    }
                 }
             }
         }
