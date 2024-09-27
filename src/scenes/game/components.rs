@@ -1,17 +1,24 @@
 use raylib::prelude::*;
 use raylib::color::{Color as RayColor};
-use viktoe_chess::board::GameState;
+use viktoe_chess::board::{GameState, MoveType, Turn};
+use viktoe_chess::piece::{CheckState, Color, Piece};
 use viktoe_chess::prelude::BoardPosition;
+
+use crate::scenes::game::screen::BOARD_OFFSET_X;
 
 use super::{SceneStorage, Game, screen, promotion};
 
-use super::screen::{ATTACK_CIRCLE_RADIUS, IMAGE_SIZE, TILE_SIZE};
+use super::screen::{board_coord_to_screen, ATTACK_CIRCLE_RADIUS, BOARD_OFFSET_Y, BOARD_SIZE, IMAGE_SIZE, TILE_SIZE};
 use super::textures::get_texture_for_square;
 
-const RING_WIDTH  : f32 = 5.0;
-const RING_PADDING : f32 = 3.0;
-const INNER_RADIUS : f32 = (TILE_SIZE as f32 / 2.0) - RING_WIDTH - RING_PADDING;
-const OUTER_RADIUS : f32 = (TILE_SIZE as f32 / 2.0) - RING_PADDING;
+const ATTACK_RING_WIDTH  : f32 = 5.0;
+const ATTACK_RING_PADDING : f32 = 3.0;
+const ATTACK_INNER_RADIUS : f32 = (TILE_SIZE as f32 / 2.0) - ATTACK_RING_WIDTH - ATTACK_RING_PADDING;
+const ATTACK_OUTER_RADIUS : f32 = (TILE_SIZE as f32 / 2.0) - ATTACK_RING_PADDING;
+
+const TURN_VISUAL_OFFSET : i32 = 15;
+const TURN_VISUAL_HEIGHT : i32 = 5;
+const TURN_VISUAL_WIDTH : i32 = BOARD_SIZE - 20;
 
 pub fn draw_board_background(draw_handler: &mut RaylibDrawHandle, game: &Game) {
     let mut color_index = 0;
@@ -62,7 +69,7 @@ pub fn draw_attackable_slots(draw_handler: &mut RaylibDrawHandle, scene: &SceneS
                     let (px, py) = screen::board_coord_to_screen(x as i32, y as i32);
                     if scene.chess.get_square(&pos).is_some() {
                         let center = Vector2{ x: (px + TILE_SIZE / 2) as f32, y: (py + TILE_SIZE / 2) as f32 };
-                        draw_handler.draw_ring(center, INNER_RADIUS, OUTER_RADIUS, 0.0, 360.0, 1, scene.game.colors[3]);
+                        draw_handler.draw_ring(center, ATTACK_INNER_RADIUS, ATTACK_OUTER_RADIUS, 0.0, 360.0, 1, scene.game.colors[3]);
                     } else {
                         draw_handler.draw_circle(px + (TILE_SIZE) / 2, py + (TILE_SIZE) / 2, ATTACK_CIRCLE_RADIUS as f32, scene.game.colors[3]);
                     }
@@ -72,15 +79,33 @@ pub fn draw_attackable_slots(draw_handler: &mut RaylibDrawHandle, scene: &SceneS
     }
 }
 
+pub fn draw_player_turn_bar(draw_handler: &mut RaylibDrawHandle, scene: &SceneStorage) {
+    let py = match scene.chess.get_player_turn() {
+        Turn::White => BOARD_OFFSET_Y + BOARD_SIZE + TURN_VISUAL_OFFSET,
+        Turn::Black => BOARD_OFFSET_Y - TURN_VISUAL_OFFSET - TURN_VISUAL_HEIGHT,
+    };
+
+    const px : i32 = BOARD_OFFSET_X + (BOARD_SIZE - TURN_VISUAL_WIDTH) / 2;
+
+    draw_handler.draw_rectangle(px, py, TURN_VISUAL_WIDTH, TURN_VISUAL_HEIGHT, scene.game.colors[4]);
+}
 
 pub fn draw_special_state(draw_handler: &mut RaylibDrawHandle, scene: &SceneStorage) {
     match scene.chess.get_game_state() {
-        GameState::Check => draw_king_in_check(draw_handler, scene),
+        GameState::Check => {
+            draw_king_in_check(draw_handler, scene)
+        },
         GameState::Promotion(..) => promotion::draw(draw_handler, scene),
         _ => {}
     }
 }
 
 fn draw_king_in_check(draw_handler: &mut RaylibDrawHandle, scene: &SceneStorage) {
-
+    let index = match scene.chess.get_player_turn() {
+        Turn::White => scene.game.king_index.0,
+        Turn::Black => scene.game.king_index.1,
+    };
+    
+    let (px, py) = board_coord_to_screen(index % 8, index / 8);
+    draw_handler.draw_rectangle(px, py, TILE_SIZE, TILE_SIZE, scene.game.colors[5]);
 }

@@ -29,7 +29,6 @@ pub fn update(rl: &mut RaylibHandle, scene: &mut SceneStorage) {
         let (x, y) = screen_to_board_coord(rl.get_mouse_x(), rl.get_mouse_y());
 
         if x != 9 || !(2..=5).contains(&y) {
-            println!("({}, {})", x, y);
             return;
         }
 

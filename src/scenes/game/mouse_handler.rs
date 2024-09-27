@@ -24,6 +24,7 @@ fn mouse_left_click(rl: &mut RaylibHandle, scene: &mut SceneStorage) {
         // if selected_index == clicked_index
         if selected_index != y * 8 + x {
             let (sx, sy) = ((selected_index % 8) as u8, (selected_index / 8) as u8);
+
             let moved = scene.chess.move_piece(
                 &BoardPosition::try_from((sx, sy)).unwrap(), 
                 &BoardPosition::try_from((x as u8, y as u8)).unwrap());
@@ -33,6 +34,9 @@ fn mouse_left_click(rl: &mut RaylibHandle, scene: &mut SceneStorage) {
                     Turn::White => Turn::White,
                     Turn::Black => Turn::Black,
                 };
+
+                scene.game.update_king_index((sy * 8 + sx) as i32, y * 8 + x, &turn);
+
                 match moved.unwrap() {
                     GameState::Promotion(..) => { scene.game.promoted = (turn, ((sx + (sy & 1) + 1) & 1) as usize) }
                     _ => {}

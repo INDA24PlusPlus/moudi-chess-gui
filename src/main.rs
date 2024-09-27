@@ -9,9 +9,6 @@ const HEIGHT : i32 = 700;
 // TODO:
 // 1. Add end scene
 // 2. Add start scene with custom fen
-// 3. Add in-check visual
-// 4. Add piece capture visual not the normal dot that is hard to see
-// 5. Add whos turn visual (yellow bar on the players side)
 
 fn main() {
     let (mut rl, thread) = raylib::init()
