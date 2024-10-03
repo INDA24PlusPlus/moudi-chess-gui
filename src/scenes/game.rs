@@ -1,19 +1,23 @@
-use raylib::prelude::*;
-use raylib::color::{Color as RayColor};
-use viktoe_chess::board::{Board, GameState, MoveType, Turn};
+use std::borrow::BorrowMut;
 
-use super::{SceneStorage, SceneType};
+use crate::ui::animate::*;
+use player::{local::LocalPlayer, Player, PlayerTypes};
+use raylib::prelude::*;
+use raylib::color::Color as RayColor;
+use viktoe_chess::{board::{GameState, Turn}, piece::Color, prelude::BoardPosition, ChessGame};
+
+use super::{Scene, SceneInitType, SceneStorage, SceneType};
+
+use crate::FPS;
 
 mod screen;
 
 mod textures;
 use textures::*;
 
-mod mouse_handler;
-use mouse_handler::*;
-
 mod components;
 mod promotion;
+pub mod player;
 
 const WHITE_SLOT_COLOR : u32 = 0xedd6b0ff;
 const BLACK_SLOT_COLOR : u32 = 0xb88762ff;
@@ -23,53 +27,102 @@ const TURN_VISUAL_COLOR : u32 = 0xebc334ff;
 const KING_SQUARE_IN_CHECK : u32 = 0xf55742ff;
 
 pub struct Game {
+    chess: ChessGame,
     white_textures: [Texture2D ; PIECE_COUNT],
     black_textures: [Texture2D ; PIECE_COUNT],
     colors: [RayColor ; 6],
-    selected_slot: Option<i32>,
-    selected_piece_moves: Option<Board<MoveType>>,
-    mouse: Vector2,
-    promoted: (Turn, usize),
-    king_index: (i32, i32)
+    players: [PlayerTypes; 2],
+    player_turn: Turn,
+    promoted_slot: Option<i32>,
+    king_index: (i32, i32),
+    animation: Animation,
 }
 
-pub fn draw_scene(draw_handler: &mut RaylibDrawHandle, scene: &SceneStorage) {
-    components::draw_board_background(draw_handler, &scene.game);
-    components::draw_special_state(draw_handler, scene);
-    components::draw_attackable_slots(draw_handler, scene);
-    components::draw_pieces_on_board(draw_handler, scene);
-    components::draw_player_turn_bar(draw_handler, scene);
-    draw_handler.draw_fps(10, 10);
-}
-
-pub fn update(rl: &mut RaylibHandle, scene: &mut SceneStorage) -> SceneType {
-    match scene.chess.get_game_state() {
-        GameState::Draw | GameState::CheckMate => { /*return SceneType::End*/ },
-        GameState::Promotion(..) => { promotion::update(rl, scene) } // block update_mouse_action and call promotion update
-        _ => { update_mouse_action(rl, scene) },
+impl Scene for Game {
+    fn draw(&mut self, draw_handler: &mut RaylibDrawHandle) {
+        self.draw_board_background(draw_handler);
+        self.draw_special_state(draw_handler);
+        self.draw_attackable_slots(draw_handler);
+        self.draw_pieces_on_board(draw_handler);
+        self.draw_player_turn_bar(draw_handler);
     }
 
-    SceneType::Game
+    fn update(&mut self, rl: &mut RaylibHandle) -> SceneInitType {
+        match self.chess.get_game_state() {
+            GameState::Ongoing => self.on_ongoing(rl),
+            GameState::Promotion(..) => {
+                if self.get_player_mut().on_promotion() {
+                    self.update_promotion(rl);
+                }
+            },
+            GameState::CheckMate | GameState::Draw => self.get_player_mut().on_end(),
+            _ => {},
+        }
+
+        SceneInitType::None
+    }
 }
 
 impl Game {
-    pub fn init(rl: &mut RaylibHandle, thread: &RaylibThread) -> Game {
+    pub fn init(rl: &mut RaylibHandle, thread: &RaylibThread, players: [PlayerTypes; 2]) -> Self {
         Game {
+            chess: ChessGame::default(),
             white_textures: PIECE_NAMES.map(|name| load_piece_texture(rl, thread, "white", name)),
             black_textures: PIECE_NAMES.map(|name| load_piece_texture(rl, thread, "black", name)),
             // [white, black, selected, attackable]
             colors: [ RayColor::get_color(WHITE_SLOT_COLOR), RayColor::get_color(BLACK_SLOT_COLOR), RayColor::get_color(SELECTED_SLOT_COLOR), RayColor::get_color(ATTACKABLE_SLOT_COLOR), RayColor::get_color(TURN_VISUAL_COLOR), RayColor::get_color(KING_SQUARE_IN_CHECK)],
-            mouse: Vector2 { x: 0.0, y: 0.0 },
-            selected_slot: None,
-            selected_piece_moves: None,
-            promoted: (Turn::White, 0),
-            king_index: (4, 7 * 8 + 4)
+            players,
+            player_turn: Turn::White,
+            promoted_slot: None,
+            king_index: (4, 7 * 8 + 4),
+            animation: Animation::new(Animations::EaseInOutCirc, (0.2 * FPS as f32) as u32),
         }
     }
 
-    fn update_king_index(&mut self, from: i32, to: i32, turn: &Turn) {
+    fn on_ongoing(&mut self, rl: &mut RaylibHandle) {
+        self.get_player_mut().on_ongoing(rl);
+
+        if let Some(selected) = self.get_player().get_selected_slot() {
+            let (sx, sy) = (selected as u8 % 8, selected as u8 / 8);
+            let from = BoardPosition::try_from((sx, sy)).unwrap();
+
+            if let Some(move_to) = self.get_player().get_move() {
+                let to = BoardPosition::try_from((move_to as u8 % 8, move_to as u8 / 8)).unwrap();
+
+                if !self.get_player_mut().on_move_piece() {
+                    return;
+                }
+
+                let moved =  self.chess.move_piece(&from, &to);
+
+                if moved.is_ok() {
+                    self.player_turn = match self.chess.get_player_turn() {
+                        Turn::White => Turn::White,
+                        Turn::Black => Turn::Black,
+                    };
+
+                    self.animation.restart();
+                    self.update_king_index(selected, move_to);
+
+                    if let GameState::Promotion(..) = moved.unwrap() {
+                        self.promoted_slot = Some(((sx + (sy & 1) + 1) & 1) as i32)
+                    }
+                }
+            } else if let Some(piece) = self.chess.get_square(&from) {
+                let turn = self.chess.get_player_turn();
+
+                if !((matches!(piece, Color::White(_)) && matches!(turn, Turn::White)) || (matches!(piece, Color::Black(_)) && matches!(turn, Turn::Black))) {
+                    self.get_player_mut().clear_selected();
+                }
+            } else {
+                self.get_player_mut().clear_selected();
+            }
+        }
+    }
+
+    fn update_king_index(&mut self, from: i32, to: i32) {
         // inverse since the turn has shifted to the opponent player since the move was made
-        match turn {
+        match self.chess.get_player_turn() {
             Turn::Black => {
                 if self.king_index.0 == from {
                     self.king_index.0 = to;
@@ -83,4 +136,17 @@ impl Game {
         }
     }
 
+    fn get_player(&self) -> &impl Player {
+        match self.player_turn {
+            Turn::White => &self.players[0],
+            Turn::Black => &self.players[1],
+        }
+    }
+
+    fn get_player_mut(&mut self) -> &mut impl Player {
+        match self.player_turn {
+            Turn::White => &mut self.players[0],
+            Turn::Black => &mut self.players[1],
+        }
+    }
 }

@@ -6,3 +6,4 @@ edition = "2021"
 [dependencies]
 raylib = "5.0.2"
 viktoe-chess = { git = "https://github.com/INDA24PlusPlus/viktoe-chess" }
+chess-networking = { git = "https://github.com/INDA24PlusPlus/chess-networking" }
