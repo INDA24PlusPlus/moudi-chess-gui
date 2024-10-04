@@ -23,7 +23,7 @@ impl Scene for Start {
         }
     }
 
-    fn update(&mut self, rl: &mut RaylibHandle) -> SceneInitType {
+    fn update(&mut self, rl: &mut RaylibHandle, thread: &RaylibThread) -> SceneInitType {
         for element in &mut self.elements {
             if element.update(rl) {
                 let id = element.get_id();

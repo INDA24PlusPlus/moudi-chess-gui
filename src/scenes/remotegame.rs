@@ -1,5 +1,4 @@
-use ::core::panic;
-use std::{borrow::Borrow, collections::HashMap, io::Read, mem, net::TcpStream, os::unix::thread, time::Duration};
+use std::{collections::HashMap, io::Read, mem, net::TcpStream, time::Duration};
 
 use chess_networking::Start;
 use raylib::prelude::*;
@@ -18,8 +17,7 @@ const BACK_BUTTON_PADDING : i32 = 10;
 const BACK_BUTTON_SIZE : i32 = 50;
 
 pub struct RemoteGame {
-    game: Game,
-    is_connected: bool,
+    game: Option<Game>,
     stream: TcpStream,
     elements: [UIElement; 2],
     actions: HashMap<usize, Box<dyn Fn(&Self) -> SceneInitType>>
@@ -27,8 +25,8 @@ pub struct RemoteGame {
 
 impl Scene for RemoteGame {
     fn draw(&mut self, draw_handler: &mut RaylibDrawHandle) {
-        if self.is_connected {
-            self.game.draw(draw_handler);
+        if let Some(game) = &mut self.game {
+            game.draw(draw_handler);
         } else {
             for element in &self.elements {
                 element.draw(draw_handler);
@@ -36,14 +34,15 @@ impl Scene for RemoteGame {
         }
     }
 
-    fn update(&mut self, rl: &mut RaylibHandle) -> SceneInitType {
-        if self.is_connected {
-            self.game.update(rl);
+    fn update(&mut self, rl: &mut RaylibHandle, thread: &RaylibThread) -> SceneInitType {
+        if let Some(game) = &mut self.game {
+            game.update(rl, thread);
         } else {
             if rl.is_key_pressed(KeyboardKey::KEY_ESCAPE) {
                 return SceneInitType::RemoteConn;
             }
-            self.update_connection();
+
+            self.update_connection(rl, thread);
             for element in &mut self.elements {
                 if element.update(rl) {
                     let id = element.get_id();
@@ -53,12 +52,13 @@ impl Scene for RemoteGame {
                 }
             }
         }
+
         SceneInitType::None
     }
 }
 
 impl RemoteGame {
-    pub fn init(rl: &mut RaylibHandle, thread: &RaylibThread, stream: TcpStream) -> Self {
+    pub fn init(rl: &mut RaylibHandle, stream: TcpStream) -> Self {
         // make sure that any stream IO will not be blocking
         stream.set_nonblocking(true).unwrap();
 
@@ -81,10 +81,8 @@ impl RemoteGame {
         back_button.set_height(BACK_BUTTON_SIZE);
         back_button.set_text("<", 45);
 
-        let players = [PlayerTypes::RemoteSend(RemoteSendPlayer::init()), PlayerTypes::RemoteRecv(RemoteRecvPlayer::init())];
         let mut rgame = RemoteGame {
-            game: Game::init(rl, thread, players),
-            is_connected: false,
+            game: None,
             stream,
             elements: [UIElement::Label(label), UIElement::Button(back_button)],
             actions: HashMap::new()
@@ -99,12 +97,14 @@ impl RemoteGame {
         self.actions.insert(id, action);
     }
 
-    pub fn update_connection(&mut self) {
+    pub fn update_connection(&mut self, rl: &mut RaylibHandle, thread: &RaylibThread) {
         let mut buf = [0u8; mem::size_of::<Start>()];
         let _ = self.stream.read(&mut buf);
 
         if let Ok(start) = chess_networking::Start::try_from(buf.as_slice()) {
-            self.is_connected = true;
+            let send_player = PlayerTypes::RemoteSend(RemoteSendPlayer::init(self.stream.try_clone().unwrap()));
+            let recv_player = PlayerTypes::RemoteRecv(RemoteRecvPlayer::init(self.stream.try_clone().unwrap()));
+            self.game = Some(Game::init(rl, thread, if start.is_white { [send_player, recv_player] } else { [recv_player, send_player] }));
         }
     }
 }

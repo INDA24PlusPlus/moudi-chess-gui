@@ -1,12 +1,10 @@
-use std::borrow::BorrowMut;
-
 use crate::ui::animate::*;
-use player::{local::LocalPlayer, Player, PlayerTypes};
+use player::{Player, PlayerTypes};
 use raylib::prelude::*;
 use raylib::color::Color as RayColor;
 use viktoe_chess::{board::{GameState, Turn}, piece::Color, prelude::BoardPosition, ChessGame};
 
-use super::{Scene, SceneInitType, SceneStorage, SceneType};
+use super::{Scene, SceneInitType, SceneStorage};
 
 use crate::FPS;
 
@@ -47,7 +45,7 @@ impl Scene for Game {
         self.draw_player_turn_bar(draw_handler);
     }
 
-    fn update(&mut self, rl: &mut RaylibHandle) -> SceneInitType {
+    fn update(&mut self, rl: &mut RaylibHandle, _: &RaylibThread) -> SceneInitType {
         match self.chess.get_game_state() {
             GameState::Ongoing => self.on_ongoing(rl),
             GameState::Promotion(..) => {
@@ -136,17 +134,25 @@ impl Game {
         }
     }
 
-    fn get_player(&self) -> &impl Player {
+    pub fn get_player(&self) -> &impl Player {
         match self.player_turn {
             Turn::White => &self.players[0],
             Turn::Black => &self.players[1],
         }
     }
 
-    fn get_player_mut(&mut self) -> &mut impl Player {
+    pub fn get_player_mut(&mut self) -> &mut impl Player {
         match self.player_turn {
             Turn::White => &mut self.players[0],
             Turn::Black => &mut self.players[1],
         }
+    }
+
+    pub fn get_game_state(&self) -> &GameState {
+        self.chess.get_game_state()
+    }
+
+    pub fn get_player_turn(&self) -> &Turn {
+        self.chess.get_player_turn()
     }
 }

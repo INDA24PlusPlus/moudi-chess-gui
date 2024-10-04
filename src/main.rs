@@ -1,6 +1,6 @@
-use std::{cell::RefCell, env, os::unix::thread, sync::{Arc, Mutex}};
+use std::env;
 
-use scenes::{start::Start, Scene, SceneInitType, SceneStorage};
+use scenes::{SceneInitType, SceneStorage};
 use raylib::prelude::*;
 use server::Server;
 
@@ -11,10 +11,6 @@ mod server;
 const WIDTH : i32 = 900;
 const HEIGHT : i32 = 700;
 pub const FPS : u32 = 60;
-
-// TODO:
-// 1. Add end scene
-// 2. Add start scene with custom fen
 
 fn main() -> std::io::Result<()> {
     
@@ -38,7 +34,7 @@ fn main() -> std::io::Result<()> {
     scene.set_scene(SceneInitType::Start, &mut rl, &thread);
 
     while !rl.window_should_close() {
-        let next_scene = scene.update(&mut rl);
+        let next_scene = scene.update(&mut rl, &thread);
 
         if !matches!(next_scene, SceneInitType::None) {
             scene.set_scene(next_scene, &mut rl, &thread);

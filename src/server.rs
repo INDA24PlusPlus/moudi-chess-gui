@@ -1,8 +1,9 @@
 use std::{io::{self, Read}, net::{TcpListener, TcpStream}, ops::Index, sync::{atomic::AtomicBool, Arc}, thread, time::{Duration, SystemTime, UNIX_EPOCH}};
 
 mod client;
+use chess_networking::Ack;
 use client::ServerClient;
-use viktoe_chess::ChessGame;
+use viktoe_chess::{board::Turn, prelude::BoardPosition, ChessGame};
 
 pub enum ServerState {
     GameInitiation,
@@ -19,11 +20,10 @@ pub struct Server {
     chess: ChessGame,
     white: Option<ServerClient>,
     black: Option<ServerClient>,
+    turn: Turn,
 
     clients: Vec<ServerClient>
 }
-
-const BUF : [u8; 1024 ] = [0; 1024];
 
 impl Server {
     pub fn init(port: u16) -> std::io::Result<(Self, Arc<AtomicBool>)> {
@@ -40,6 +40,7 @@ impl Server {
             chess: ChessGame::default(),
             white: None,
             black: None,
+            turn: Turn::White,
 
             clients: vec![]
         }, running))
@@ -47,6 +48,7 @@ impl Server {
 
     pub fn check_for_client(&mut self) -> Option<ServerClient> {
         if let Ok((stream, addr)) = self.listener.accept() {
+            stream.set_nonblocking(true).unwrap();
             Some(ServerClient::new(stream, addr))
         } else {
             None
@@ -55,7 +57,6 @@ impl Server {
 
     fn initiation(&mut self) {
         if let (Some(white), Some(black)) = (&mut self.white, &mut self.black) {
-            println!("Switch");
             self.clients.clear();
             self.state = ServerState::Playing;
             white.send_start();
@@ -91,7 +92,23 @@ impl Server {
     }
 
     fn play(&mut self) {
+        if let Some(move_packet) = self.get_current_player().read_move() {
+            let from = BoardPosition::try_from(move_packet.from).unwrap();
+            let to = BoardPosition::try_from(move_packet.to).unwrap();
 
+            match self.chess.move_piece(&from, &to) {
+                Ok(state) => {
+                    self.get_current_player().send_ack(Ack { ok: true, end_state: None });
+                    self.update_turn();
+                    self.get_current_player().send_move(&move_packet);
+                    self.get_current_player().read_ack();
+                },
+                Err(_) => {
+                    self.get_current_player().send_ack(Ack { ok: false, end_state: None });
+                }
+            }
+
+        }
     }
 
     fn end(&mut self) {
@@ -115,5 +132,19 @@ impl Server {
         }
 
         println!("Server stopped");
+    }
+
+    fn get_current_player(&mut self) -> &mut ServerClient {
+        match self.turn {
+            Turn::White => self.white.as_mut().expect("White player should exist"),
+            Turn::Black => self.black.as_mut().expect("Black player should exist")
+        }
+    }
+
+    fn update_turn(&mut self) {
+        self.turn = match self.chess.get_player_turn() {
+            Turn::White => Turn::White,
+            Turn::Black => Turn::Black,
+        }
     }
 }

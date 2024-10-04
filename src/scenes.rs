@@ -52,13 +52,13 @@ impl SceneStorage {
         }
     }
 
-    pub fn update(&mut self, rl: &mut RaylibHandle) -> SceneInitType {
+    pub fn update(&mut self, rl: &mut RaylibHandle, thread: &RaylibThread) -> SceneInitType {
         match self.scene {
-            SceneType::Start(ref mut start) => start.update(rl),
-            SceneType::RemoteConn(ref mut rconn) => rconn.update(rl),
-            SceneType::RemoteGame(ref mut rgame) => rgame.update(rl),
-            SceneType::Game(ref mut game) => game.update(rl),
-            SceneType::End(ref mut end) => end.update(rl),
+            SceneType::Start(ref mut start) => start.update(rl, thread),
+            SceneType::RemoteConn(ref mut rconn) => rconn.update(rl, thread),
+            SceneType::RemoteGame(ref mut rgame) => rgame.update(rl, thread),
+            SceneType::Game(ref mut game) => game.update(rl, thread),
+            SceneType::End(ref mut end) => end.update(rl, thread),
             SceneType::None => { SceneInitType::None },
         }
     }
@@ -67,7 +67,7 @@ impl SceneStorage {
         self.scene = match scene {
             SceneInitType::Start => SceneType::Start(Start::init(rl)),
             SceneInitType::RemoteConn => SceneType::RemoteConn(RemoteConn::init(rl, thread)),
-            SceneInitType::RemoteGame(stream) => SceneType::RemoteGame(RemoteGame::init(rl, thread, stream)),
+            SceneInitType::RemoteGame(stream) => SceneType::RemoteGame(RemoteGame::init(rl, stream)),
             SceneInitType::Game(players) => SceneType::Game(Game::init(rl, thread, players)),
             SceneInitType::End => SceneType::End(End::init(rl, thread)),
             SceneInitType::None => { SceneType::None },
@@ -77,7 +77,7 @@ impl SceneStorage {
 
 pub trait Scene {
     // fn init(rl: &mut RaylibHandle, thread: &RaylibThread) -> Self;
-    fn update(&mut self, rl: &mut RaylibHandle) -> SceneInitType;
+    fn update(&mut self, rl: &mut RaylibHandle, thread: &RaylibThread) -> SceneInitType;
     fn draw(&mut self, draw_handler: &mut RaylibDrawHandle);
 }
 

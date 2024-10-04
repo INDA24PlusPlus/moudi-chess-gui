@@ -28,7 +28,7 @@ impl Scene for RemoteConn {
         }
     }
 
-    fn update(&mut self, rl: &mut raylib::RaylibHandle) -> SceneInitType {
+    fn update(&mut self, rl: &mut raylib::RaylibHandle, thread: &RaylibThread) -> SceneInitType {
         if rl.is_key_pressed(KeyboardKey::KEY_ESCAPE) {
             return SceneInitType::Start;
         }
